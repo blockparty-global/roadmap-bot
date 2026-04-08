@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:tools.slack.dev)",
+      "WebFetch(domain:docs.slack.dev)",
+      "mcp__mirdan__enhance_prompt",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)",
+      "mcp__mirdan__validate_code_quality",
+      "Bash(xargs grep:*)",
+      "Bash(find:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(curl -s \"https://www.google.com/search?q=slack+bot+roadmap+backlog+feature+tracking+management\" -H \"User-Agent: Mozilla/5.0\")",
+      "WebFetch(domain:www.indiehackers.com)",
+      "WebFetch(domain:news.ycombinator.com)",
+      "WebFetch(domain:howsthisgoing.com)",
+      "WebFetch(domain:www.roadmap.vote)",
+      "WebFetch(domain:lethain.com)",
+      "WebFetch(domain:slack.com)",
+      "WebFetch(domain:keestalkstech.com)",
+      "WebFetch(domain:standuply.com)",
+      "WebFetch(domain:tech.gc.com)",
+      "Bash(npm run:*)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "mirdan",
+    "figma"
+  ]
+}
