@@ -3,5 +3,5 @@ dist/
 .env
 backlog.json
 *.log
-./mirdan
+.mirdan/
 .claude/
