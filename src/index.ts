@@ -9,13 +9,20 @@ import {
   deleteFeature,
   splitFeature,
 } from "./state.js";
-import { ensureCanvas } from "./canvas.js";
+import { ensureList } from "./list.js";
 import type { Backlog, ProposedChange } from "./types.js";
 
 const CHECKMARK = "white_check_mark";
 const CANCEL = "x";
+const REQUIRED_CONFIRMATIONS = 3;
 
-export const pendingProposals = new Map<string, ProposedChange>();
+type PendingProposal = {
+  proposal: ProposedChange;
+  confirmedBy: Set<string>;
+  channel: string;
+};
+
+export const pendingProposals = new Map<string, PendingProposal>();
 
 let botUserId = "";
 
@@ -88,7 +95,8 @@ app.event("app_mention", async ({ event, say, client }) => {
     const proposalText = [
       `*Proposal:* ${proposal.humanSummary}`,
       "",
-      "React :white_check_mark: to confirm, :x: to cancel, or reply in thread to discuss.",
+      `Needs ${REQUIRED_CONFIRMATIONS} :white_check_mark: reactions to confirm. React :x: to cancel.`,
+      "Tag reviewers in this thread if you'd like specific people to weigh in.",
     ].join("\n");
 
     const reply = await say({
@@ -105,7 +113,11 @@ app.event("app_mention", async ({ event, say, client }) => {
       name: CHECKMARK,
     });
 
-    pendingProposals.set(replyTs, proposal);
+    pendingProposals.set(replyTs, {
+      proposal,
+      confirmedBy: new Set(),
+      channel: event.channel,
+    });
     console.log(`[proposal] ${proposal.action}: "${proposal.humanSummary}"`);
   } catch (err) {
     const message =
@@ -118,8 +130,8 @@ app.event("app_mention", async ({ event, say, client }) => {
 app.event("reaction_added", async ({ event, client }) => {
   if (event.user === botUserId) return;
 
-  const proposal = pendingProposals.get(event.item.ts);
-  if (!proposal) return;
+  const pending = pendingProposals.get(event.item.ts);
+  if (!pending) return;
 
   if (event.reaction === CANCEL) {
     pendingProposals.delete(event.item.ts);
@@ -133,26 +145,41 @@ app.event("reaction_added", async ({ event, client }) => {
 
   if (event.reaction !== CHECKMARK) return;
 
+  pending.confirmedBy.add(event.user);
+  const count = pending.confirmedBy.size;
+  const remaining = REQUIRED_CONFIRMATIONS - count;
+
+  if (remaining > 0) {
+    console.log(`[vote] ${event.user} confirmed (${count}/${REQUIRED_CONFIRMATIONS})`);
+    await client.chat.postMessage({
+      channel: event.item.channel,
+      text: `${count}/${REQUIRED_CONFIRMATIONS} confirmations. ${remaining} more needed.`,
+      thread_ts: event.item.ts,
+    });
+    return;
+  }
+
   try {
     const backlog = loadBacklog();
-    const updated = applyChange(backlog, proposal, event.user);
+    const updated = applyChange(backlog, pending.proposal, event.user);
     saveBacklog(updated);
-    console.log(`[confirmed] ${proposal.action} by ${event.user}`);
+    console.log(`[confirmed] ${pending.proposal.action} with ${count} votes`);
 
     pendingProposals.delete(event.item.ts);
 
-    let canvasNote = "";
+    let listNote = "";
     try {
       const channelId = process.env.CHANNEL_ID ?? event.item.channel;
-      await ensureCanvas(client, channelId, updated);
-    } catch (canvasErr) {
-      console.log(`[error] canvas update failed: ${canvasErr instanceof Error ? canvasErr.message : "unknown"}`);
-      canvasNote = " (Note: Canvas failed to update — it will sync on next change.)";
+      await ensureList(client, channelId, updated);
+    } catch (listErr) {
+      console.log(`[error] list update failed: ${listErr instanceof Error ? listErr.message : "unknown"}`);
+      listNote = " (Note: List failed to update — it will sync on next change.)";
     }
 
+    const voters = [...pending.confirmedBy].map((u) => `<@${u}>`).join(", ");
     await client.chat.postMessage({
       channel: event.item.channel,
-      text: `Done! ${proposal.humanSummary}${canvasNote}`,
+      text: `Done! ${pending.proposal.humanSummary}\nConfirmed by: ${voters}${listNote}`,
       thread_ts: event.item.ts,
     });
   } catch (err) {
@@ -177,8 +204,8 @@ app.event("reaction_added", async ({ event, client }) => {
   const backlog = loadBacklog();
   if (backlog.features.length > 0 && process.env.CHANNEL_ID) {
     try {
-      await ensureCanvas(app.client, process.env.CHANNEL_ID, backlog);
-      console.log("Canvas synced on startup");
+      await ensureList(app.client, process.env.CHANNEL_ID, backlog);
+      console.log("List synced on startup");
     } catch (err) {
       console.log(`Canvas sync failed on startup: ${err instanceof Error ? err.message : "unknown"}`);
     }

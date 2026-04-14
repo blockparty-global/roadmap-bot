@@ -25,6 +25,8 @@ export type Feature = {
 export type Backlog = {
   features: Feature[];
   canvasId?: string;
+  listId?: string;
+  listItemMap?: Record<string, string>;
   lastUpdatedBy: string;
   lastUpdatedAt: string;
 };
